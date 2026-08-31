@@ -35,7 +35,7 @@ function card(a){
   return `<article class="anime-card" onclick="openAnime('${a.id}')"><span class="rank-badge">#${position}</span><img class="cover" src="${cover(a.cover,a.title)}" onerror="this.src='https://placehold.co/500x750/171824/ffffff?text=Anime'"><div class="card-body"><div class="title">${esc(a.title)}</div><div class="score">⭐ ${avg(a).toFixed(2)} / 6 <span>· ${a.votes.length}</span></div></div></article>`;
 }
 function statsView(){const all=state.anime,groupAvg=all.length?all.reduce((s,a)=>s+avg(a),0)/all.length:0,peak=all.filter(a=>rankFor(avg(a))===6).length;return `<div class="container"><div class="eyebrow">Gruppen-Übersicht</div><div class="page-title-row"><div><h1>Statistiken</h1><p class="muted">Ein schneller Blick auf euren Anime-Geschmack.</p></div><button class="btn primary" onclick="openAdd()">＋ Anime</button></div><div class="stats-grid"><div class="stat"><span>Anime im Ranking</span><b>${all.length}</b><small>🎌 gesammelt</small></div><div class="stat"><span>Gruppen-Durchschnitt</span><b>${groupAvg.toFixed(2)}</b><small>⭐ von 6 Punkten</small></div><div class="stat"><span>Absolute Peak</span><b>${peak}</b><small>🔥 Anime</small></div><div class="stat"><span>Abstimmungen</span><b>${totalVotes()}</b><small>🗳️ Stimmen</small></div></div><section class="analytics"><div class="section-head"><h2>📊 Verteilung</h2><small>Nach Anime-Anzahl</small></div>${[6,5,4,3,2,1].map(g=>{const n=all.filter(a=>rankFor(avg(a))===g).length,p=all.length?Math.round(n/all.length*100):0;return `<div class="dist-row"><span>${RANKS[g].icon} ${RANKS[g].name}</span><div class="bar"><div class="fill" style="width:${p}%"></div></div><b>${p}%</b></div>`}).join('')}</section><section class="analytics"><div class="section-head"><h2>🔥 Eure Top 5</h2><small>nach Durchschnitt</small></div><div class="top-list">${sorted().slice(0,5).map((a,i)=>`<button class="top-item" onclick="openAnime(${a.id})"><span>#${i+1}</span><img src="${cover(a.cover,a.title)}"><strong>${esc(a.title)}</strong><em>⭐ ${avg(a).toFixed(2)}</em></button>`).join('')}</div></section></div>`}
-function openAnime(id){const a=state.anime.find(x=>x.id===id),score=avg(a),r=RANKS[rankFor(score)],counts=[6,5,4,3,2,1].map(x=>a.votes.filter(v=>v===x).length);showModal(`<div class="modal-head"><h3>Anime-Details</h3><button class="close" onclick="closeModal()">×</button></div><div class="modal-body"><div class="detail"><img src="${cover(a.cover,a.title)}"><div><span class="pill">${r.icon} ${r.name}</span><h2>${esc(a.title)}</h2><div class="big-score">⭐ ${score.toFixed(2)} <span>/ 6</span></div><p class="muted">${a.votes.length} Bewertungen · Deine Stimme wird nur einmal gezählt und kann geändert werden.</p><button class="btn primary" onclick="openVote('${a.id}')">Meine Bewertung</button></div></div><div class="distribution"><h3>Stimmenverteilung</h3>${[6,5,4,3,2,1].map((x,i)=>{const p=a.votes.length?Math.round(counts[i]/a.votes.length*100):0;return `<div class="dist-row"><span>${RANKS[x].icon} ${RANKS[x].name}</span><div class="bar"><div class="fill" style="width:${p}%"></div></div><b>${p}%</b></div>`}).join('')}</div></div>`)}
+function openAnime(id){const a=state.anime.find(x=>x.id===id),score=avg(a),r=RANKS[rankFor(score)],counts=[6,5,4,3,2,1].map(x=>a.votes.filter(v=>v===x).length);showModal(`<div class="modal-head"><h3>Anime-Details</h3><button class="close" onclick="closeModal()">×</button></div><div class="modal-body"><div class="detail"><img src="${cover(a.cover,a.title)}"><div><span class="pill">${r.icon} ${r.name}</span><h2>${esc(a.title)}</h2><div class="big-score">⭐ ${score.toFixed(2)} <span>/ 6</span></div><p class="muted">${a.votes.length} Bewertungen · Deine Stimme wird nur einmal gezählt und kann geändert werden.</p><button class="btn primary" onclick="openVote('${a.id}')">Meine Bewertung</button><button class="btn ghost" onclick="removeAnime('${a.id}')">🗑️ Anime entfernen</button></div></div><div class="distribution"><h3>Stimmenverteilung</h3>${[6,5,4,3,2,1].map((x,i)=>{const p=a.votes.length?Math.round(counts[i]/a.votes.length*100):0;return `<div class="dist-row"><span>${RANKS[x].icon} ${RANKS[x].name}</span><div class="bar"><div class="fill" style="width:${p}%"></div></div><b>${p}%</b></div>`}).join('')}</div></div>`)}
 function openVote(id){const a=state.anime.find(x=>x.id===id);showModal(`<div class="modal-head"><h3>Deine Bewertung</h3><button class="close" onclick="closeModal()">×</button></div><div class="modal-body"><div class="vote-intro"><img src="${cover(a.cover,a.title)}"><div><span class="eyebrow">Dein Take</span><h2>${esc(a.title)}</h2><p class="muted">Wähle genau einen Rang. Deine bisherige Stimme wird ersetzt.</p></div></div><div class="vote-options">${[6,5,4,3,2,1].map(x=>`<button class="vote" onclick="castVote('${a.id}',${x})"><span>${RANKS[x].icon}</span><b>${RANKS[x].name}</b><small>${x}/6</small></button>`).join('')}</div><button class="vote unseen" onclick="markUnseen(${a.id})">👁️ Nicht gesehen <small>nicht in die Berechnung einbeziehen</small></button></div>`)}
 async function castVote(id,val){
   if(!cloud||session?.demo){
@@ -92,6 +92,41 @@ async function castVote(id,val){
   closeModal();
   render();
   toast(`Gespeichert: ${RANKS[val].icon} ${RANKS[val].name}`);
+}
+async function removeAnime(id){
+  if(!cloud || session?.demo){
+    const index=state.anime.findIndex(a=>a.id===id);
+    if(index===-1)return toast('Anime nicht gefunden.');
+
+    const a=state.anime[index];
+
+    if(!confirm(`"${a.title}" wirklich aus dem Ranking entfernen?`))return;
+
+    state.anime.splice(index,1);
+    save();
+    closeModal();
+    render();
+    toast(`${a.title} wurde entfernt.`);
+    return;
+  }
+
+  const a=state.anime.find(x=>x.id===id);
+
+  if(!a)return toast('Anime nicht gefunden.');
+
+  if(!confirm(`"${a.title}" wirklich aus der Gruppe entfernen?`))return;
+
+  const {error}=await sb
+    .from('group_anime')
+    .delete()
+    .eq('id',a.id);
+
+  if(error)return toast(error.message);
+
+  await loadCloud();
+  closeModal();
+  render();
+  toast(`${a.title} wurde aus der Gruppe entfernt.`);
 }
 async function markUnseen(id){if(cloud&&!session?.demo){const {error}=await sb.from('ratings').upsert({group_id:group.id,anime_id:id,user_id:session.user.id,score:null,seen:false,updated_at:new Date().toISOString()},{onConflict:'group_id,anime_id,user_id'});if(error)return toast(error.message);await loadCloud()}closeModal();render();toast('Als „Nicht gesehen“ markiert.')}
 function openAdd(){showModal(`<div class="modal-head"><h3>＋ Anime hinzufügen</h3><button class="close" onclick="closeModal()">×</button></div><div class="modal-body"><div class="notice"><b>Automatische Daten:</b> Suche über AniList. Titel und Cover werden direkt übernommen.</div><div class="search-row"><input id="animeSearch" class="search" placeholder="z. B. Re:ZERO, Frieren, One Piece..." onkeydown="if(event.key==='Enter')searchAnime()"><button class="btn primary" onclick="searchAnime()">Suchen</button></div><div id="results"></div></div>`)}

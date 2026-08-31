@@ -13,7 +13,7 @@ const seed=[
  {id:10,title:'The Promised Neverland',cover:'https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx101759-rJcQYx0mJ2gN.png',votes:[3,3,2,2,2,3]}
 ];
 const cfg=window.ANIMERANK_CONFIG||{}; const cloud=Boolean(cfg.supabaseUrl&&cfg.supabaseKey&&window.supabase);
-const sb=cloud?window.supabase.createClient(cfg.supabaseUrl,cfg.supabaseKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}}):null;
+const sb=cloud?window.supabase.createClient(cfg.supabaseUrl,cfg.supabaseKey,{db:{schema:'public'},auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}}):null;
 let session=null, group=null, members=[];
 let state={view:'dashboard',username:localStorage.getItem('ar-user')||'Dennis',group:localStorage.getItem('ar-group')||'Demo-Modus',anime:JSON.parse(localStorage.getItem('ar-anime')||'null')||structuredClone(seed)};
 const save=()=>{localStorage.setItem('ar-user',state.username);localStorage.setItem('ar-group',state.group);localStorage.setItem('ar-anime',JSON.stringify(state.anime))};

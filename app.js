@@ -50,7 +50,68 @@ async function saveProfile(){const username=document.getElementById('username').
 async function signOut(){await sb.auth.signOut();session=null;group=null;state.anime=structuredClone(seed);render();toast('Ausgeloggt.')}
 function openSettings(){showModal(`<div class="modal-head"><h3>⚙ Einstellungen</h3><button class="close" onclick="closeModal()">×</button></div><div class="modal-body profile"><div class="setting"><div><b>${cloud?'Cloud verbunden':'Demo-Modus'}</b><span>${cloud?'Supabase Auth + Datenbank':'Lokale Browser-Speicherung'}</span></div><span class="pill">${cloud?'ONLINE':'DEMO'}</span></div><div class="setting"><div><b>Demo-Daten</b><span>Lokales Ranking zurücksetzen</span></div><button class="btn" onclick="if(confirm('Demo-Daten wirklich zurücksetzen?')){state.anime=structuredClone(seed);save();closeModal();render();toast('Demo-Daten zurückgesetzt.')} ">Zurücksetzen</button></div></div>`)}
 function showModal(body){document.getElementById('modalRoot').innerHTML=`<div class="modal-back" onclick="if(event.target===this)closeModal()"><div class="modal">${body}</div></div>`}function closeModal(){document.getElementById('modalRoot').innerHTML=''}function toast(t){const x=document.getElementById('toast');x.textContent=t;x.classList.add('show');clearTimeout(window.__toast);window.__toast=setTimeout(()=>x.classList.remove('show'),2800)}
-async function loadCloud(){if(!cloud||!session?.user)return;const {data:gs,error:ge}=await sb.from('group_members').select('group_id,groups(*)').eq('user_id',session.user.id);if(ge)return toast(ge.message);if(!group){group=gs?.[0]?.groups||null}if(!group){state.anime=[];members=[];return}const gid=group.id;const [ga,rt,ms]=await Promise.all([sb.from('group_anime').select('anime_id,anime(*)').eq('group_id',gid),sb.from('ratings').select('*').eq('group_id',gid).eq('seen',true),sb.from('group_members').select('*').eq('group_id',gid)]);if(ga.error)return toast(ga.error.message);members=ms.data||[];const byAnime=new Map((ga.data||[]).map(r=>[r.anime_id,r.anime]));state.anime=[...byAnime.values()].map(a=>({...a,id:a.id,votes:(rt.data||[]).filter(r=>r.anime_id===a.id&&r.score).map(r=>r.score)}));state.group=group.name}
+async function loadCloud(){
+  if(!cloud||!session?.user)return;
+
+  const {data:gs,error:ge}=await sb
+    .from('group_members')
+    .select('group_id,groups(*)')
+    .eq('user_id',session.user.id);
+
+  if(ge)return toast(ge.message);
+
+  if(!group){
+    group=gs?.[0]?.groups||null;
+  }
+
+  if(!group){
+    state.anime=[];
+    members=[];
+    return;
+  }
+
+  const gid=group.id;
+
+  const [ga,ms]=await Promise.all([
+    sb.from('group_anime')
+      .select('*')
+      .eq('group_id',gid),
+
+    sb.from('group_members')
+      .select('*')
+      .eq('group_id',gid)
+  ]);
+
+  if(ga.error)return toast(ga.error.message);
+
+  members=ms.data||[];
+
+  const groupAnimeIds=(ga.data||[]).map(a=>a.id);
+
+  let ratings=[];
+
+  if(groupAnimeIds.length){
+    const {data:rt,error:re}=await sb
+      .from('ratings')
+      .select('*')
+      .in('group_anime_id',groupAnimeIds);
+
+    if(re)return toast(re.message);
+
+    ratings=rt||[];
+  }
+
+  state.anime=(ga.data||[]).map(a=>({
+    ...a,
+    id:a.id,
+    cover:a.cover_url,
+    votes:ratings
+      .filter(r=>r.group_anime_id===a.id&&!r.not_seen&&r.rating)
+      .map(r=>r.rating)
+  }));
+
+  state.group=group.name;
+}
 async function bootCloud(){if(!cloud||!session?.user)return;const {data:p}=await sb.from('profiles').select('*').eq('id',session.user.id).maybeSingle();if(p)state.username=p.username;await loadCloud();setupRealtime()}
 function setupRealtime(){if(!cloud||!group)return;sb.channel('animerank-'+group.id).on('postgres_changes',{event:'*',schema:'public',table:'ratings',filter:`group_id=eq.${group.id}`},async()=>{await loadCloud();render()}).on('postgres_changes',{event:'*',schema:'public',table:'group_anime',filter:`group_id=eq.${group.id}`},async()=>{await loadCloud();render()}).subscribe()}
 const app={go(v){state.view=v;render()}};document.querySelectorAll('.nav-btn').forEach(b=>b.onclick=()=>app.go(b.dataset.view));document.getElementById('profileBtn').onclick=openProfile;

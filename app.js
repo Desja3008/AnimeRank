@@ -38,7 +38,53 @@ async function castVote(id,val){if(!cloud||session?.demo){const a=state.anime.fi
 async function markUnseen(id){if(cloud&&!session?.demo){const {error}=await sb.from('ratings').upsert({group_id:group.id,anime_id:id,user_id:session.user.id,score:null,seen:false,updated_at:new Date().toISOString()},{onConflict:'group_id,anime_id,user_id'});if(error)return toast(error.message);await loadCloud()}closeModal();render();toast('Als „Nicht gesehen“ markiert.')}
 function openAdd(){showModal(`<div class="modal-head"><h3>＋ Anime hinzufügen</h3><button class="close" onclick="closeModal()">×</button></div><div class="modal-body"><div class="notice"><b>Automatische Daten:</b> Suche über AniList. Titel und Cover werden direkt übernommen.</div><div class="search-row"><input id="animeSearch" class="search" placeholder="z. B. Re:ZERO, Frieren, One Piece..." onkeydown="if(event.key==='Enter')searchAnime()"><button class="btn primary" onclick="searchAnime()">Suchen</button></div><div id="results"></div></div>`)}
 async function searchAnime(){const q=document.getElementById('animeSearch').value.trim(),out=document.getElementById('results');if(!q)return;out.innerHTML='<div class="loading">🔎 Suche AniList…</div>';try{const res=await fetch('https://graphql.anilist.co',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:`query($search:String){Page(perPage:12){media(search:$search,type:ANIME,sort:SEARCH_MATCH){id title{romaji english native}coverImage{large}episodes seasonYear}}}`,variables:{search:q}})});const data=await res.json();const items=data?.data?.Page?.media||[];out.innerHTML=items.length?`<div class="search-results">${items.map(x=>`<button class="result" onclick='addAnime(${JSON.stringify(x).replace(/'/g,"&#39;")})'><img src="${cover(x.coverImage?.large,x.title.romaji)}"><div>${esc(x.title.english||x.title.romaji)}<small>${x.seasonYear||''} · ${x.episodes||'?'} Folgen</small></div></button>`).join('')}</div>`:'<div class="empty">Keinen Anime gefunden.</div>'}catch(e){out.innerHTML='<div class="notice">Die Anime-Suche konnte gerade nicht erreicht werden.</div>'}}
-async function addAnime(x){const title=x.title.english||x.title.romaji||x.title.native;if(!cloud||session?.demo){if(state.anime.some(a=>a.externalId===x.id||a.title.toLowerCase()===title.toLowerCase()))return toast('Dieser Anime ist bereits im Ranking.');state.anime.push({id:Date.now(),externalId:x.id,title,cover:x.coverImage?.large,votes:[]});save();closeModal();render();toast(`${title} wurde hinzugefügt.`);return}let {data:a,error}=await sb.from('anime').select('*').eq('anilist_id',x.id).maybeSingle();if(error)return toast(error.message);if(!a){({data:a,error}=await sb.from('anime').insert({anilist_id:x.id,title,cover:x.coverImage?.large}).select().single());if(error)return toast(error.message)}const r=await sb.from('group_anime').insert({group_id:group.id,anime_id:a.id,added_by:session.user.id});if(r.error&&r.error.code!=='23505')return toast(r.error.message);await loadCloud();closeModal();render();toast(`${title} wurde zur Gruppe hinzugefügt.`)}
+async function addAnime(x){
+  const title=x.title.english||x.title.romaji||x.title.native;
+
+  if(!cloud||session?.demo){
+    if(state.anime.some(a=>a.externalId===x.id||a.title.toLowerCase()===title.toLowerCase()))
+      return toast('Dieser Anime ist bereits im Ranking.');
+
+    state.anime.push({
+      id:Date.now(),
+      externalId:x.id,
+      title,
+      cover:x.coverImage?.large,
+      votes:[]
+    });
+
+    save();
+    closeModal();
+    render();
+    toast(`${title} wurde hinzugefügt.`);
+    return;
+  }
+
+  const {data:a,error}=await sb
+    .from('group_anime')
+    .insert({
+      group_id:group.id,
+      anilist_id:x.id,
+      title:title,
+      cover_url:x.coverImage?.large||null,
+      year:x.year||null,
+      added_by:session.user.id
+    })
+    .select()
+    .single();
+
+  if(error){
+    if(error.code==='23505')
+      return toast('Dieser Anime ist bereits in der Gruppe.');
+
+    return toast(error.message);
+  }
+
+  await loadCloud();
+  closeModal();
+  render();
+  toast(`${title} wurde zur Gruppe hinzugefügt.`);
+}
 function openGroup(){if(cloud&&!session?.demo&&!group){showModal(`<div class="modal-head"><h3>👥 Deine Gruppen</h3><button class="close" onclick="closeModal()">×</button></div><div class="modal-body profile"><p class="muted">Du bist noch keiner Gruppe beigetreten. Erstelle eine neue Gruppe oder nutze einen Einladungscode.</p><button class="btn primary" onclick="createGroup()">＋ Gruppe erstellen</button><button class="btn" onclick="openJoin()">🔗 Mit Einladungscode beitreten</button></div>`);return}if(!cloud||session?.demo){showModal(`<div class="modal-head"><h3>👥 ${esc(state.group)}</h3><button class="close" onclick="closeModal()">×</button></div><div class="modal-body profile"><label>Gruppenname</label><input id="groupName" class="input" value="${esc(state.group)}"><div class="notice">Cloud ist noch nicht eingerichtet. Nach dem Eintragen der Supabase-Daten kannst du hier echte Gruppen erstellen und Codes teilen.</div><button class="btn primary" onclick="saveGroup()">Speichern</button></div>`);return}showModal(`<div class="modal-head"><h3>👥 Gruppe</h3><button class="close" onclick="closeModal()">×</button></div><div class="modal-body profile"><label>Gruppenname</label><input id="groupName" class="input" value="${esc(group.name)}"><label>Einladungscode</label><div class="profile-row"><input class="input" value="${esc(group.invite_code)}" readonly><button class="btn" onclick="navigator.clipboard?.writeText('${group.invite_code}');toast('Code kopiert!')">Kopieren</button></div><div class="member-preview">${members.slice(0,6).map(m=>`<span>👤</span>`).join('')}<b>${members.length} Mitglieder</b></div><button class="btn primary" onclick="saveGroup()">Namen speichern</button><button class="btn" onclick="openJoin()">＋ Einer anderen Gruppe beitreten</button></div>`)}
 async function saveGroup(){const name=document.getElementById('groupName').value.trim()||'Meine Anime-Gruppe';if(!cloud||session?.demo){state.group=name;save();closeModal();render();return}const {error}=await sb.from('groups').update({name}).eq('id',group.id);if(error)return toast(error.message);group.name=name;state.group=name;closeModal();render();toast('Gruppenname gespeichert.')}
 function openJoin(){showModal(`<div class="modal-head"><h3>👥 Gruppe beitreten</h3><button class="close" onclick="closeModal()">×</button></div><div class="modal-body profile"><label>Einladungscode</label><input id="joinCode" class="input" placeholder="ANIME-7K4P"><div class="notice">Der Code kommt von einem Gruppenmitglied.</div><button class="btn primary" onclick="joinGroup()">Beitreten</button></div>`)}
